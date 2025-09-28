@@ -1,166 +1,263 @@
-# 🧠 ShadowSearch Chrome Extension
+# ShadowSearch - AI-Powered Browser Extension
 
-A Chrome extension that provides on-demand AI analysis of webpages with contextual insights, RAG-powered search using R2 storage, and related video recommendations.
+A Chrome extension that provides intelligent page analysis, contextual search, and AI-powered insights directly in your browser. Built with Cloudflare Workers for scalable AI processing and R2 storage for session management.
 
-## ✨ Features
+## 🚀 Features
 
-- **Floating Brain Icon** - Discreet, clickable icon on every webpage
-- **Dual Analysis Modes**:
-  - **Page Analysis** (Lumen OFF) - Analyzes current page content only
-  - **RAG Mode** (Lumen ON) - Uses external sources via R2 storage + AI Search
-- **Quick Actions** - Summarize, Key Points, ELI5, Concepts
-- **Related Videos** - 4 YouTube videos with thumbnails
-- **Smart Sources** - Clickable links with real-time content fetching
-- **R2 Storage** - Local development with Cloudflare R2 simulation
-
-## 🚀 Quick Setup (5 Minutes!)
-
-### 1. Clone and Install
-```bash
-git clone <your-repo>
-cd cloudfare_main
-```
-
-### 2. Get Serper API Key (Required)
-1. Go to [Serper.dev](https://serper.dev)
-2. Sign up for a free account (100 free searches/month)
-3. Get your API key from the dashboard
-4. Update `workers/wrangler.toml`:
-   ```toml
-   [vars]
-   SERPER_API_KEY = "your_serper_api_key_here"
-   ```
-
-### 3. Start the Worker (Local Development)
-```bash
-cd workers/api
-npm install -g wrangler
-wrangler dev --port 8787
-```
-**That's it!** The worker will run locally with R2 simulation - no Cloudflare account needed for development.
-
-### 4. Load Chrome Extension
-1. Open Chrome → **Extensions** → **Developer mode** ON
-2. Click **Load unpacked**
-3. Select the `src` folder
-4. The extension will automatically connect to `http://localhost:8787`
-
-## 🎯 How to Use
-
-1. **Visit any webpage** (e.g., Wikipedia, news sites)
-2. **Click the brain icon** in the top-right corner
-3. **Toggle Lumen ON/OFF**:
-   - **Lumen OFF**: Analyzes current page content only
-   - **Lumen ON**: Searches the web and uses RAG for comprehensive answers
-4. **Ask questions** or use quick actions (Summarize, Key Points, etc.)
-5. **View sources** - Clickable links to original articles
-6. **Watch videos** - Related YouTube content with thumbnails
+- **Smart Page Analysis**: AI-powered topic extraction and entity recognition
+- **Contextual Search**: Intelligent search across Reddit, HackerNews, ArXiv, and YouTube
+- **RAG-Powered Q&A**: Ask questions and get answers backed by real-time web content
+- **Session Management**: Clean R2 storage with per-tab, per-mode session isolation
+- **YouTube Integration**: Video analysis and related content discovery
+- **Real-time Insights**: AI-generated insights and critical perspectives
 
 ## 🏗️ Architecture
 
-- **Frontend**: Chrome Extension (MV3)
-- **Backend**: Cloudflare Workers + AI + R2 Storage
-- **Data Sources**: Google Search (Serper API) + YouTube (yt-search)
-- **AI Models**: Llama 3.1-8b-instruct + BGE embeddings
-- **Storage**: Cloudflare R2 (local simulation for development)
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Chrome        │    │  Cloudflare      │    │   External      │
+│   Extension     │◄──►│  Workers API     │◄──►│   Services      │
+│                 │    │                  │    │                 │
+│ • Content Script│    │ • /analyzer      │    │ • Serper API    │
+│ • Background    │    │ • /search        │    │ • YouTube       │
+│ • Options       │    │ • /qa (RAG)      │    │ • AI Models     │
+│                 │    │ • /insights      │    │                 │
+└─────────────────┘    │ • /clear-session │    └─────────────────┘
+                       │ • R2 Storage     │
+                       └──────────────────┘
+```
+
+## 🛠️ Setup Instructions
+
+### Prerequisites
+
+- Node.js 18+
+- Chrome browser
+- Cloudflare account
+- Serper API key (for search functionality)
+
+### 1. Clone and Install
+
+```bash
+git clone <your-repo-url>
+cd cloudfare_main
+npm install
+```
+
+### 2. Deploy Cloudflare Workers
+
+```bash
+# Navigate to API worker
+cd workers/api
+
+# Login to Cloudflare (if not already)
+wrangler login
+
+# Deploy the API worker
+wrangler deploy
+```
+
+The worker will be available at: `https://shadowsearch-api.your-username.workers.dev`
+
+### 3. Configure Environment Variables
+
+Set your Serper API key as a secret:
+
+```bash
+cd workers/api
+wrangler secret put SERPER_API_KEY
+# Enter your Serper API key when prompted
+```
+
+### 4. Load Extension in Chrome
+
+1. Open Chrome and go to `chrome://extensions/`
+2. Enable "Developer mode"
+3. Click "Load unpacked" and select the `cloudfare_main` folder
+4. The ShadowSearch extension should now appear in your extensions
+
+### 5. Configure API Key (Optional)
+
+1. Click the ShadowSearch extension icon
+2. Go to Options
+3. Enter your Serper API key for enhanced search functionality
+
+## 📡 API Endpoints
+
+### Core Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/analyzer` | POST | Analyze page content and extract topics/entities |
+| `/search` | POST | Search across platforms and find related videos |
+| `/insights` | POST | Generate AI-powered insights and critical takes |
+| `/qa` | POST | RAG-powered question answering with sources |
+| `/analyze_question` | POST | Analyze specific questions about page content |
+
+### Session Management
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/clear-session` | POST | Clear R2 storage for a specific session |
+| `/r2-content` | POST | View stored content in R2 bucket |
+
+### Example API Usage
+
+```javascript
+// Analyze a page
+const response = await fetch('https://shadowsearch-api.your-username.workers.dev/analyzer', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    title: "Page Title",
+    url: "https://example.com",
+    text: "Page content..."
+  })
+});
+
+// Ask a question with RAG
+const qaResponse = await fetch('https://shadowsearch-api.your-username.workers.dev/qa', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    query: "What is machine learning?",
+    topic: "AI",
+    sessionId: "session_123"
+  })
+});
+```
+
+## 🗄️ R2 Session Management
+
+The extension uses intelligent session management to prevent R2 storage bloat:
+
+### Session Model
+- **Per-tab isolation**: Each browser tab gets its own session
+- **Per-mode isolation**: Lumen ON/OFF modes have separate sessions
+- **Session persistence**: Same session used across multiple queries in the same tab/mode
+- **Automatic cleanup**: Sessions cleared when tab closes or mode switches
+
+### Session Lifecycle
+1. **Tab opens**: Creates fresh sessions for both modes
+2. **Mode toggle**: Clears old mode session, creates new one
+3. **Multiple queries**: Uses same session (content accumulates)
+4. **Tab closes**: Clears both mode sessions from R2
+
+### Session ID Format
+```
+session_{tabId}_{mode}_{timestamp}
+- tabId: Chrome tab ID
+- mode: "off" or "on" (Lumen mode)
+- timestamp: Creation time
+```
 
 ## 🔧 Development
 
-### Local Development (Recommended)
+### Local Development
+
 ```bash
+# Start local API worker
 cd workers/api
-wrangler dev --port 8787
+wrangler dev
+
+# Extension will use localhost:8787 for API calls
 ```
-- **R2 Storage**: Local simulation (fast, free)
-- **No Cloudflare Account**: Required for development
-- **Hot Reload**: Changes reflect immediately
 
-### Extension Development
-1. Make changes to files in `src/`
-2. Reload extension in Chrome (Extensions → Reload)
-3. Test on any webpage
+### Testing Endpoints
 
-### Viewing R2 Content
 ```bash
-curl -X POST http://localhost:8787/r2-content -H "Content-Type: application/json" | jq
+# Test analyzer
+curl -X POST https://shadowsearch-api.your-username.workers.dev/analyzer \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Test","url":"https://example.com","text":"AI content"}'
+
+# Test RAG QA
+curl -X POST https://shadowsearch-api.your-username.workers.dev/qa \
+  -H "Content-Type: application/json" \
+  -d '{"query":"What is AI?","topic":"AI","sessionId":"test_session"}'
+
+# Clear session
+curl -X POST https://shadowsearch-api.your-username.workers.dev/clear-session \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId":"test_session"}'
 ```
 
 ## 📁 Project Structure
 
 ```
 cloudfare_main/
-├── manifest.json              # Chrome extension config
 ├── src/
-│   ├── content/
-│   │   ├── content.js         # Brain icon + overlay logic
-│   │   └── styles.css         # UI styling
-│   ├── background/
-│   │   └── background.js      # Service worker + API calls
-│   └── options/
-│       ├── options.html       # Settings page
-│       └── options.js         # Settings logic
+│   ├── background/          # Service worker
+│   ├── content/            # Content script
+│   └── options/            # Extension options
 ├── workers/
-│   ├── wrangler.toml          # Cloudflare config (with SERPER_API_KEY)
-│   └── api/src/
-│       └── index.js           # Main worker with R2-based RAG
-└── google_search.js           # Content extraction utilities
+│   └── api/                # Cloudflare Worker
+│       ├── src/index.js    # Main worker code
+│       └── wrangler.toml   # Worker config
+├── prompts/                # AI prompt templates
+├── icons/                  # Extension icons
+└── manifest.json           # Extension manifest
 ```
 
-## 🎯 How It Works
+## 🔑 Environment Variables
 
-1. **User clicks brain icon** → Overlay opens
-2. **Page Analysis Mode** → Analyzes current page content only
-3. **RAG Mode** → 
-   - Searches Google via Serper API
-   - Extracts content from articles
-   - Stores in R2 bucket (local simulation)
-   - Uses LLM to generate answers from stored content
-4. **AI generates insights** → Displays with sources and videos
+### Required
+- `SERPER_API_KEY`: Your Serper API key for search functionality
 
-## 🔑 Required APIs
+## 🚀 Deployment
 
-- **Serper API** - For fetching Google search results (100 free/month)
-- **Cloudflare Workers AI** - For LLM and embeddings (free tier available)
-- **R2 Storage** - Local simulation for development (no account needed)
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**Extension not loading:**
-- Check Chrome Developer mode is ON
-- Reload extension after changes
-- Check browser console for errors
-
-**No search results:**
-- Verify SERPER_API_KEY in `workers/wrangler.toml`
-- Check Serper API quota (100 free searches/month)
-- Restart worker: `wrangler dev --port 8787`
-
-**Worker not starting:**
-- Check if port 8787 is available: `lsof -ti:8787`
-- Kill existing processes: `pkill -f wrangler`
-- Restart: `cd workers/api && wrangler dev --port 8787`
-
-**No sources showing:**
-- Check R2 content: `curl -X POST http://localhost:8787/r2-content`
-- Verify content extraction is working
-- Check browser console for API errors
-
-### Debug Commands
-
+### Cloudflare Workers
 ```bash
-# Check worker status
-curl http://localhost:8787/health
-
-# View R2 content
-curl -X POST http://localhost:8787/r2-content -H "Content-Type: application/json" | jq
-
-# Test QA endpoint
-curl -X POST http://localhost:8787/qa -H "Content-Type: application/json" \
-  -d '{"query": "test", "topic": "test", "sessionId": "test"}'
+cd workers/api
+wrangler deploy
 ```
+
+### Chrome Extension
+1. Load unpacked extension in Chrome
+2. Or package as `.crx` for distribution
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
 ## 📄 License
 
-MIT License - Feel free to use for your hackathon projects!
+MIT License - see LICENSE file for details
+
+## 🆘 Troubleshooting
+
+### Common Issues
+
+**Extension not working:**
+- Check if Cloudflare Worker is deployed
+- Verify API endpoints are accessible
+- Check browser console for errors
+
+**RAG not returning results:**
+- Verify Serper API key is set
+- Check R2 bucket permissions
+- Ensure session management is working
+
+**YouTube videos not loading:**
+- Check YouTube worker is running locally
+- Verify network connectivity
+- Check for CORS issues
+
+### Debug Mode
+
+Enable debug logging by opening Chrome DevTools and checking the console for detailed logs.
+
+## 📞 Support
+
+For issues and questions:
+- Open an issue on GitHub
+- Check the troubleshooting section
+- Review the API documentation
+
+---
+
+**Built with ❤️ using Cloudflare Workers, Chrome Extensions API, and AI**

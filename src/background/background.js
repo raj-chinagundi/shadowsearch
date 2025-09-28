@@ -3,12 +3,12 @@
 let lastTopic = null;
 
 const DEFAULT_WORKERS = {
-  analyzer: 'http://127.0.0.1:8787/analyzer',
-  search: 'http://127.0.0.1:8787/search',
-  insights: 'http://127.0.0.1:8787/insights',
-  qa: 'http://127.0.0.1:8787/qa',
-  analyze_question: 'http://127.0.0.1:8787/analyze_question',
-  // YouTube worker endpoints
+  analyzer: 'https://shadowsearch-api.tylerbrent017.workers.dev/analyzer',
+  search: 'https://shadowsearch-api.tylerbrent017.workers.dev/search',
+  insights: 'https://shadowsearch-api.tylerbrent017.workers.dev/insights',
+  qa: 'https://shadowsearch-api.tylerbrent017.workers.dev/qa',
+  analyze_question: 'https://shadowsearch-api.tylerbrent017.workers.dev/analyze_question',
+  // YouTube worker endpoints (still local)
   youtube_detect: 'http://127.0.0.1:8788/detect-youtube',
   youtube_download: 'http://127.0.0.1:8788/download-video',
   youtube_analyze: 'http://127.0.0.1:8788/analyze-video',

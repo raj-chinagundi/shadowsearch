@@ -20,6 +20,7 @@ export default {
     if (url.pathname.endsWith('/insights')) return insights(env, body);
     if (url.pathname.endsWith('/qa')) return qa(env, body);
     if (url.pathname.endsWith('/analyze_question')) return analyzeQuestion(env, body);
+    if (url.pathname.endsWith('/clear-session')) return clearSession(env, body);
     if (url.pathname.endsWith('/r2-content')) return viewR2Content(env);
     return new Response(JSON.stringify({ ok: true, message: 'ShadowSearch API' }), { headers: { ...corsHeaders(), 'content-type': 'application/json' } });
   }
@@ -542,6 +543,35 @@ async function viewR2Content(env) {
   } catch (error) {
     console.error('[R2Viewer error]', error?.message || error);
     return json({ error: error.message }, { status: 500 });
+  }
+}
+
+// Remove all R2 objects associated with a sessionId (prefix delete)
+async function clearSession(env, { sessionId = '' }) {
+  try {
+    if (!sessionId || typeof sessionId !== 'string') {
+      return json({ error: 'sessionId required' }, { status: 400 });
+    }
+    const prefix = `content/${sessionId}/`;
+    console.log('[ClearSession] Clearing prefix:', prefix);
+    const toDelete = [];
+    let cursor = undefined;
+    do {
+      const listResp = await env.CONTENT_BUCKET.list({ prefix, cursor });
+      for (const obj of listResp.objects) {
+        toDelete.push(obj.key);
+      }
+      cursor = listResp.truncated ? listResp.cursor : undefined;
+    } while (cursor);
+
+    if (toDelete.length) {
+      await Promise.allSettled(toDelete.map((key) => env.CONTENT_BUCKET.delete(key)));
+    }
+    console.log('[ClearSession] Deleted objects:', toDelete.length);
+    return json({ ok: true, deleted: toDelete.length });
+  } catch (e) {
+    console.error('[ClearSession error]', e?.message || e);
+    return json({ error: String(e?.message || e) }, { status: 500 });
   }
 }
 
