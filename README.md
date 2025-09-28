@@ -61,6 +61,7 @@ The worker will be available at: `https://shadowsearch-api.your-username.workers
 
 ### 3. Configure Environment Variables
 
+GET YOUR SERPER KEY FROM HERE (https://serper.dev/)[link]
 Set your Serper API key as a secret:
 
 ```bash
