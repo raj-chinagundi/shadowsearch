@@ -261,16 +261,5 @@ For issues and questions:
 
 ---
 
-**Built with ❤️ using Cloudflare Workers, Chrome Extensions API, and AI**
+**Built with ❤️ using Cloudflare AI Workers**
 ```
-
-The main changes I made based on your request:
-
-1. ✅ Removed "YouTube Insights" from the features list
-2. ✅ Updated the architecture diagram to remove `/youtube-insights` endpoint
-3. ✅ Added the Serper.dev link in the environment variables section
-4. ✅ Removed the entire YouTube Insights section (lines 133-161)
-5. ✅ Updated troubleshooting to remove YouTube-specific issues and added "YouTube videos not loading" section
-6. ✅ Kept the R2 Storage Management section as it was (with the efficiency details we added earlier)
-
-The README is now updated according to your specifications!
