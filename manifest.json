@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "ShadowSearch",
+  "version": "1.0.0",
+  "description": "On-demand AI analysis overlay triggered by a discreet floating brain icon.",
+  "permissions": ["activeTab", "storage", "scripting", "downloads"],
+  "host_permissions": ["<all_urls>", "https://www.youtube.com/*", "https://youtu.be/*"],
+  "icons": {
+    "16": "icons/brain-16.png",
+    "32": "icons/brain-32.png",
+    "48": "icons/brain-48.png",
+    "128": "icons/brain-128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/content.js"],
+      "css": ["src/content/styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "src/background/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "ShadowSearch",
+    "default_icon": {
+      "16": "icons/brain-16.png",
+      "32": "icons/brain-32.png"
+    }
+  },
+  "options_page": "src/options/options.html"
+}
+

@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>ShadowSearch Options</title>
+  <style>
+    body{font-family:-apple-system,system-ui,sans-serif;margin:20px}
+    label{display:block;margin:6px 0}
+    input{min-width:420px}
+  </style>
+  <script src="options.js"></script>
+  </head>
+<body>
+  <h2>ShadowSearch Configuration</h2>
+  
+  <h3>🔑 API Keys</h3>
+  <p>Enter your Serper API key for search functionality. Get your free key from <a href="https://serper.dev" target="_blank">serper.dev</a></p>
+  <label>Serper API Key <input id="serperApiKey" type="password" placeholder="Enter your Serper API key"/></label>
+  
+  <h3>🌐 Worker Endpoints</h3>
+  <p>Optionally override Cloudflare Worker endpoints. Leave blank to use defaults.</p>
+  <label>Analyzer URL <input id="analyzer" type="text" placeholder="https://..."/></label>
+  <label>Search URL <input id="search" type="text" placeholder="https://..."/></label>
+  <label>Insights URL <input id="insights" type="text" placeholder="https://..."/></label>
+  <label>QA URL <input id="qa" type="text" placeholder="https://.../qa"/></label>
+  
+  <button id="save">Save Configuration</button>
+</body>
+</html>
+
+

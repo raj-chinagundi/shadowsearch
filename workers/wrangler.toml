@@ -1,0 +1,24 @@
+name = "shadowsearch-api"
+main = "api/src/index.js"
+compatibility_date = "2024-09-01"
+
+[dev]
+port = 8787
+local_protocol = "http"
+local = true
+
+[vars]
+SERPER_API_KEY = "84c78f024891c9114a889538b934ab9e956f7812"
+
+[ai]
+binding = "AI"
+
+# R2 bucket for storing scraped content
+[[r2_buckets]]
+binding = "CONTENT_BUCKET"
+bucket_name = "shadowsearch-content"
+
+# API keys should be set as secrets, not in this file
+# Use: wrangler secret put SERPER_API_KEY
+
+
