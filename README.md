@@ -24,6 +24,7 @@ A Chrome extension that provides intelligent page analysis, contextual search, a
 │                 │    │ • /insights      │    │                 │
 └─────────────────┘    │ • /clear-session │    └─────────────────┘
                        │ • R2 Storage     │
+                       │ • AI Models      │
                        └──────────────────┘
 ```
 
