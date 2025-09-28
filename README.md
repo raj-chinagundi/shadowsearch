@@ -2,6 +2,9 @@
 
 A Chrome extension that provides intelligent page analysis, contextual search, and AI-powered insights directly in your browser. Built with Cloudflare Workers for scalable AI processing and R2 storage for session management.
 
+## UI
+[pic](https://pasteboard.co/u8xPlEqLKntn.png) <br>
+
 ## 🚀 Features
 
 - **Smart Page Analysis**: AI-powered topic extraction and entity recognition
