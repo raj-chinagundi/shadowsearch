@@ -131,7 +131,9 @@
     const overlay = document.getElementById('ss-overlay');
     try { 
       console.log('[ShadowSearch] Sending SESSION_END message');
-      chrome.runtime.sendMessage({ type: 'SESSION_END' }); 
+      chrome.runtime.sendMessage({ type: 'SESSION_END' }, (response) => {
+        console.log('[ShadowSearch] SESSION_END response:', response);
+      }); 
     } catch (e) {
       console.error('[ShadowSearch] Failed to send SESSION_END:', e);
     }
