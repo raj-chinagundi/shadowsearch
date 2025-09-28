@@ -3,7 +3,9 @@
 A Chrome extension that provides intelligent page analysis, contextual search, and AI-powered insights directly in your browser. Built with Cloudflare Workers for scalable AI processing and R2 storage for session management.
 
 ## UI
-<img src="https://pasteboard.co/u8xPlEqLKntn.png" alt="UI Preview" width="500"/>
+<img src="https://github.com/raj-chinagundi/shadowsearch/blob/main/icons/2_img.png" alt="UI Preview" width="500"/> <br>
+
+<img src="https://github.com/raj-chinagundi/shadowsearch/blob/main/icons/1_img.png" alt="UI Preview" width="500"/>
 
 ## 🚀 Features
 
