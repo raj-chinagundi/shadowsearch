@@ -109,6 +109,12 @@
         lumenBtn.classList.remove('active');
       }
       console.log('[ShadowSearch] Lumen mode:', lumenEnabled ? 'ON' : 'OFF');
+      try { 
+        console.log('[ShadowSearch] Sending LUMEN_TOGGLE message:', { type: 'LUMEN_TOGGLE', enabled: lumenEnabled });
+        chrome.runtime.sendMessage({ type: 'LUMEN_TOGGLE', enabled: lumenEnabled }); 
+      } catch (e) {
+        console.error('[ShadowSearch] Failed to send LUMEN_TOGGLE:', e);
+      }
     });
     document.querySelectorAll('.ss-chip').forEach((el) => {
       el.addEventListener('click', () => {
@@ -123,6 +129,12 @@
 
   function closeOverlay() {
     const overlay = document.getElementById('ss-overlay');
+    try { 
+      console.log('[ShadowSearch] Sending SESSION_END message');
+      chrome.runtime.sendMessage({ type: 'SESSION_END' }); 
+    } catch (e) {
+      console.error('[ShadowSearch] Failed to send SESSION_END:', e);
+    }
     if (overlay) overlay.remove();
   }
 

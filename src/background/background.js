@@ -1,6 +1,53 @@
 // Background service worker for ShadowSearch
 
 let lastTopic = null;
+let lastTabId = null;
+// Per-tab, per-mode sessions kept in memory
+// tabSessions[tabId] = { on?: sessionId, off?: sessionId }
+const tabSessions = {};
+
+function genSessionId(tabId, mode) {
+  return `session_${tabId}_${mode}_${Date.now()}`;
+}
+
+function getOrCreateSession(tabId, isLumenOn) {
+  const mode = isLumenOn ? 'on' : 'off';
+  if (!tabSessions[tabId]) tabSessions[tabId] = {};
+  if (!tabSessions[tabId][mode]) {
+    tabSessions[tabId][mode] = genSessionId(tabId, mode);
+    console.log('[ShadowSearch] Created new session:', tabId, mode, tabSessions[tabId][mode]);
+  }
+  return tabSessions[tabId][mode];
+}
+
+function getApiBaseUrl(workersOverrides = {}) {
+  const analyzerUrl = workersOverrides.analyzer || DEFAULT_WORKERS.analyzer;
+  try {
+    const u = new URL(analyzerUrl);
+    const basePath = u.pathname.replace(/\/analyzer$/, '');
+    return `${u.protocol}//${u.host}${basePath}`;
+  } catch (_) {
+    return analyzerUrl.replace(/\/analyzer$/, '');
+  }
+}
+
+async function clearSessionOnServer(sessionId) {
+  try {
+    if (!sessionId) return;
+    console.log('[ShadowSearch] Clearing session:', sessionId);
+    const { workers = {} } = await chrome.storage.sync.get(['workers']);
+    const base = getApiBaseUrl(workers);
+    const response = await fetch(`${base}/clear-session`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionId })
+    });
+    const result = await response.json();
+    console.log('[ShadowSearch] Clear result:', result);
+  } catch (e) {
+    console.warn('[ShadowSearch] clear-session failed', e?.message || e);
+  }
+}
 
 const DEFAULT_WORKERS = {
   analyzer: 'https://shadowsearch-api.tylerbrent017.workers.dev/analyzer',
@@ -16,7 +63,48 @@ const DEFAULT_WORKERS = {
 };
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('[ShadowSearch] Background received message:', message?.type, 'from tab:', sender?.tab?.id);
+  
+  // Handle async messages that don't need responses
+  if (message?.type === 'LUMEN_TOGGLE') {
+    const tabId = sender?.tab?.id;
+    console.log('[ShadowSearch] LUMEN_TOGGLE received:', tabId, message.enabled);
+    if (tabId === undefined) return true;
+    const newMode = message.enabled ? 'on' : 'off';
+    const oldMode = message.enabled ? 'off' : 'on';
+    const oldSession = tabSessions[tabId]?.[oldMode];
+    const newSessionExisting = tabSessions[tabId]?.[newMode];
+    console.log('[ShadowSearch] Old mode/session to clear:', oldMode, oldSession);
+    console.log('[ShadowSearch] Existing session in new mode (will be replaced):', newMode, newSessionExisting);
+    Promise.resolve()
+      .then(() => oldSession ? clearSessionOnServer(oldSession) : undefined)
+      .then(() => {
+        if (!tabSessions[tabId]) tabSessions[tabId] = {};
+        tabSessions[tabId][newMode] = genSessionId(tabId, newMode);
+        console.log('[ShadowSearch] Lumen toggled, new session:', tabId, newMode, tabSessions[tabId][newMode]);
+      })
+      .catch(() => {});
+    return true; // async
+  }
+  
+  if (message?.type === 'SESSION_END') {
+    const tabId = sender?.tab?.id;
+    console.log('[ShadowSearch] SESSION_END received for tab:', tabId);
+    if (tabId === undefined) return true;
+    const sessions = tabSessions[tabId] || {};
+    console.log('[ShadowSearch] Sessions to clear:', sessions);
+    const tasks = [];
+    if (sessions.on) tasks.push(clearSessionOnServer(sessions.on));
+    if (sessions.off) tasks.push(clearSessionOnServer(sessions.off));
+    Promise.allSettled(tasks).finally(() => { 
+      console.log('[ShadowSearch] Cleared sessions for tab:', tabId);
+      delete tabSessions[tabId]; 
+    });
+    return true; // async
+  }
+  
   if (message?.type === 'ANALYZE_PAGE') {
+    if (sender?.tab?.id !== undefined) lastTabId = sender.tab.id;
     handleAnalysis(message.payload)
       .then((data) => {
         try { console.log('[ShadowSearch] Analysis result', JSON.stringify(data).slice(0, 2000)); } catch (_) {}
@@ -38,7 +126,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.log('[ShadowSearch] 🔍 LUMEN ON - Starting RAG mode');
       console.log('[ShadowSearch] Query:', message.query, 'Topic:', lastTopic);
       
-      callWorker('qa', { query: message.query, topic: lastTopic, sessionId: 'session_' + Date.now() }).then((resp) => {
+      const sessionId = getOrCreateSession(sender?.tab?.id ?? 0, true);
+      callWorker('qa', { query: message.query, topic: lastTopic, sessionId }).then((resp) => {
         console.log('[ShadowSearch] 🔍 QA Response received:');
         console.log('[ShadowSearch] - Answer length:', resp.answer?.length || 0);
         console.log('[ShadowSearch] - Sources count:', resp.sources?.length || 0);
@@ -112,7 +201,8 @@ async function handleAnalysis(payload) {
     // Auto-run QA to populate Sources
     try {
       console.log('[ShadowSearch] Auto QA start', analyzer.topic);
-      const qaResp = await callWorker('qa', { query: analyzer.topic || '', topic: lastTopic, sessionId: 'session_' + Date.now() });
+      const sessionId = getOrCreateSession(lastTabId ?? 0, false);
+      const qaResp = await callWorker('qa', { query: analyzer.topic || '', topic: lastTopic, sessionId });
       console.log('[ShadowSearch] Auto QA response', JSON.stringify(qaResp).slice(0, 500));
       return { ...insights, videos: search?.videos || [], sources: qaResp?.sources || [], qa: false };
     } catch (err) {
@@ -240,3 +330,20 @@ function mockInsights({ title, url, text }) {
 
 
 
+// Cleanup on tab close
+chrome.tabs.onRemoved.addListener((tabId) => {
+  console.log('[ShadowSearch] Tab closed:', tabId);
+  const sessions = tabSessions[tabId];
+  if (!sessions) {
+    console.log('[ShadowSearch] No sessions found for tab:', tabId);
+    return;
+  }
+  console.log('[ShadowSearch] Sessions to clear on tab close:', sessions);
+  const tasks = [];
+  if (sessions.on) tasks.push(clearSessionOnServer(sessions.on));
+  if (sessions.off) tasks.push(clearSessionOnServer(sessions.off));
+  Promise.allSettled(tasks).finally(() => { 
+    console.log('[ShadowSearch] Cleared sessions on tab close:', tabId);
+    delete tabSessions[tabId]; 
+  });
+});
