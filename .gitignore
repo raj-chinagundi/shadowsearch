@@ -30,6 +30,9 @@ Thumbs.db
 .wrangler/
 wrangler.toml.bak
 
+# Exclude YouTube worker
+workers/youtube/
+
 # Temporary files
 *.tmp
 *.temp
