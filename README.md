@@ -260,7 +260,7 @@ curl -X POST https://your-worker-name.your-username.workers.dev/clear-session \
   -d '{"sessionId":"test_session"}'
 ```
 
-## 📁 Project Structure (developer-oriented)
+## 📁 Project Structure 
 
 ```
 shadowsearch/
