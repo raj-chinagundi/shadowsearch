@@ -41,7 +41,25 @@
   }
 
   function openOverlay() {
-    if (document.getElementById('ss-overlay')) return;
+    // Remove existing overlay if it exists to ensure fresh creation
+    const existingOverlay = document.getElementById('ss-overlay');
+    if (existingOverlay) existingOverlay.remove();
+    
+    // Check if this is a YouTube page
+    const isYouTube = location.href.includes('youtube.com') || location.href.includes('youtu.be');
+    const lumenButton = isYouTube ? '' : '<button id="ss-lumen" class="ss-lumen" title="Toggle external resources">💡</button>';
+    console.log('[ShadowSearch] Creating overlay - URL:', location.href);
+    console.log('[ShadowSearch] Creating overlay - isYouTube:', isYouTube, 'lumenButton:', lumenButton ? 'present' : 'hidden');
+    
+    // Add visual indicator for debugging
+    if (isYouTube) {
+      console.log('[ShadowSearch] 🚫 LUMEN BUTTON HIDDEN ON YOUTUBE PAGE');
+      console.log('[ShadowSearch] Overlay HTML will NOT include Lumen button');
+    } else {
+      console.log('[ShadowSearch] ✅ LUMEN BUTTON SHOWN ON REGULAR PAGE');
+      console.log('[ShadowSearch] Overlay HTML will include Lumen button');
+    }
+    
     const overlay = document.createElement('div');
     overlay.id = 'ss-overlay';
     overlay.innerHTML = `
@@ -59,7 +77,7 @@
         <div class="ss-search">
           <input id="ss-query" type="text" placeholder="Ask a question or search within this topic..." />
           <button id="ss-ask">🧠</button>
-          <button id="ss-lumen" class="ss-lumen" title="Toggle external resources">💡</button>
+          ${lumenButton}
         </div>
         <div class="ss-quick">
           <button class="ss-chip" data-q="Summarize this page">Summarize</button>
@@ -98,24 +116,26 @@
     document.getElementById('ss-close')?.addEventListener('click', closeOverlay);
     document.getElementById('ss-ask')?.addEventListener('click', ask);
     
-    // Lumen toggle for external resources
+    // Lumen toggle for external resources (only on non-YouTube pages)
     let lumenEnabled = false;
-    document.getElementById('ss-lumen')?.addEventListener('click', () => {
-      lumenEnabled = !lumenEnabled;
-      const lumenBtn = document.getElementById('ss-lumen');
-      if (lumenEnabled) {
-        lumenBtn.classList.add('active');
-      } else {
-        lumenBtn.classList.remove('active');
-      }
-      console.log('[ShadowSearch] Lumen mode:', lumenEnabled ? 'ON' : 'OFF');
-      try { 
-        console.log('[ShadowSearch] Sending LUMEN_TOGGLE message:', { type: 'LUMEN_TOGGLE', enabled: lumenEnabled });
-        chrome.runtime.sendMessage({ type: 'LUMEN_TOGGLE', enabled: lumenEnabled }); 
-      } catch (e) {
-        console.error('[ShadowSearch] Failed to send LUMEN_TOGGLE:', e);
-      }
-    });
+    const lumenBtn = document.getElementById('ss-lumen');
+    if (lumenBtn) {
+      lumenBtn.addEventListener('click', () => {
+        lumenEnabled = !lumenEnabled;
+        if (lumenEnabled) {
+          lumenBtn.classList.add('active');
+        } else {
+          lumenBtn.classList.remove('active');
+        }
+        console.log('[ShadowSearch] Lumen mode:', lumenEnabled ? 'ON' : 'OFF');
+        try { 
+          console.log('[ShadowSearch] Sending LUMEN_TOGGLE message:', { type: 'LUMEN_TOGGLE', enabled: lumenEnabled });
+          chrome.runtime.sendMessage({ type: 'LUMEN_TOGGLE', enabled: lumenEnabled }); 
+        } catch (e) {
+          console.error('[ShadowSearch] Failed to send LUMEN_TOGGLE:', e);
+        }
+      });
+    }
     document.querySelectorAll('.ss-chip').forEach((el) => {
       el.addEventListener('click', () => {
         const preset = el.getAttribute('data-q') || '';
@@ -143,9 +163,10 @@
   function ask() {
     const input = document.getElementById('ss-query');
     const q = input && 'value' in input ? input.value : '';
+    const isYouTube = location.href.includes('youtube.com') || location.href.includes('youtu.be');
     const lumenBtn = document.getElementById('ss-lumen');
-    const lumenEnabled = lumenBtn && lumenBtn.classList.contains('active');
-    console.log('[ShadowSearch] Asking question:', q, 'Lumen:', lumenEnabled);
+    const lumenEnabled = !isYouTube && lumenBtn && lumenBtn.classList.contains('active');
+    console.log('[ShadowSearch] Asking question:', q, 'Lumen:', lumenEnabled, 'YouTube:', isYouTube);
     chrome.runtime.sendMessage({ type: 'QUESTION', query: q, lumen: lumenEnabled });
   }
 
@@ -228,7 +249,8 @@
       const text = (window.__ss?.extractors?.extractReadableText || extractReadableText)();
       const title = document.title;
       const url = location.href;
-      sendResponse({ title, url, text });
+      const videoId = (window.__ss?.extractors?.extractVideoId || extractVideoId)(url);
+      sendResponse({ title, url, text, videoId });
     }
   });
 

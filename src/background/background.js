@@ -76,67 +76,122 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // async
   }
   if (message?.type === 'QUESTION') {
-    // Choose endpoint based on Lumen toggle
-    if (message.lumen) {
-      // RAG mode - use vector database
-      console.log('[ShadowSearch] 🔍 LUMEN ON - Starting RAG mode');
-      console.log('[ShadowSearch] Query:', message.query, 'Topic:', getLastTopic());
-      
-      const sessionId = getOrCreateSession(sender?.tab?.id ?? 0, true);
-      const topic = getLastTopic();
-      callWorker('qa', { query: message.query, topic, sessionId }).then((resp) => {
-        console.log('[ShadowSearch] 🔍 QA Response received:');
-        console.log('[ShadowSearch] - Answer length:', resp.answer?.length || 0);
-        console.log('[ShadowSearch] - Sources count:', resp.sources?.length || 0);
-        console.log('[ShadowSearch] - Sources:', resp.sources?.map(s => ({ title: s.title, url: s.url, source: s.source })) || []);
-        console.log('[ShadowSearch] - Inserted IDs:', resp.insertedIds?.length || 0);
-        
-        // Generate videos for RAG mode
-        console.log('[ShadowSearch] Calling search for RAG mode with topic:', topic, 'query:', message.query);
-        callWorker('search', { topic, pageContent: '', query: message.query }).then((searchResp) => {
-          console.log('[ShadowSearch] Search response for RAG:', searchResp);
-          const payload = { insights: [resp.answer], videos: searchResp.videos || [], sources: resp.sources, qa: true };
-          console.log('[ShadowSearch] 🔍 Sending payload to content script:', payload);
-          if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { type: 'ANALYSIS_RESULT', payload });
-        }).catch((e) => {
-          console.error('[ShadowSearch] Search error for RAG:', e);
-          const payload = { insights: [resp.answer], videos: [], sources: resp.sources, qa: true };
-          console.log('[ShadowSearch] 🔍 Sending fallback payload to content script:', payload);
-          if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { type: 'ANALYSIS_RESULT', payload });
-        });
-      }).catch((e) => {
-        console.error('[ShadowSearch] QA error:', e);
-        if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { type: 'ANALYSIS_ERROR', error: e?.message || 'QA failed' });
-      });
-    } else {
-      // Page analysis mode - analyze current page content
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs && tabs[0]) {
-          chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_PAGE_CONTENT' }, (response) => {
-            if (response) {
-              callWorker('analyze_question', { 
-                query: message.query, 
-                title: response.title, 
-                url: response.url, 
-                text: response.text 
-              }).then((resp) => {
-                // Generate videos for page analysis mode
-                console.log('[ShadowSearch] Calling search for page analysis with title:', response.title, 'query:', message.query);
-                callWorker('search', { topic: response.title, pageContent: response.text, query: message.query }).then((searchResp) => {
-                  console.log('[ShadowSearch] Search response for page analysis:', searchResp);
-                  if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { type: 'ANALYSIS_RESULT', payload: { insights: [resp.answer], videos: searchResp.videos || [], sources: [], qa: true } });
+    // Get page content first to detect YouTube
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs && tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_PAGE_CONTENT' }, (response) => {
+          if (response) {
+            const isYouTube = response.url.includes('youtube.com') || response.url.includes('youtu.be');
+            
+            if (isYouTube) {
+              // YouTube mode - simple transcript analysis + video search
+              console.log('[ShadowSearch] 📺 YouTube query mode');
+              const videoId = response.videoId;
+              if (videoId) {
+                // Get transcript and analyze
+                callWorker('youtube_transcript', { videoId }).then((tr) => {
+                  const transcriptLines = Array.isArray(tr?.lines) ? tr.lines : (Array.isArray(tr) ? tr : []);
+                  const transcriptText = transcriptLines.length
+                    ? transcriptLines.map((l) => l.text).join(' ').slice(0, 5000)
+                    : '';
+                  
+                  return callWorker('analyze_question', { 
+                    query: message.query, 
+                    title: response.title, 
+                    url: response.url, 
+                    text: transcriptText || response.text 
+                  });
+                }).then((resp) => {
+                  // Get related YouTube videos
+                  const topic = getLastTopic() || response.title;
+                  return callWorker('search', { topic, pageContent: '', query: message.query }).then((searchResp) => ({
+                    answer: resp.answer,
+                    videos: searchResp.videos || []
+                  }));
+                }).then(({ answer, videos }) => {
+                  if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { 
+                    type: 'ANALYSIS_RESULT', 
+                    payload: { insights: [answer], videos, sources: [], qa: true, isYouTube: true } 
+                  });
                 }).catch((e) => {
-                  console.error('[ShadowSearch] Search error for page analysis:', e);
-                  if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { type: 'ANALYSIS_RESULT', payload: { insights: [resp.answer], videos: [], sources: [], qa: true } });
+                  console.error('[ShadowSearch] YouTube query error:', e);
+                  if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { type: 'ANALYSIS_ERROR', error: e?.message || 'YouTube analysis failed' });
                 });
-              }).catch((e) => {
-                if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { type: 'ANALYSIS_ERROR', error: e?.message || 'Analysis failed' });
-              });
+              } else {
+                // Fallback to regular page analysis
+                callWorker('analyze_question', { 
+                  query: message.query, 
+                  title: response.title, 
+                  url: response.url, 
+                  text: response.text 
+                }).then((resp) => {
+                  if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { 
+                    type: 'ANALYSIS_RESULT', 
+                    payload: { insights: [resp.answer], videos: [], sources: [], qa: true, isYouTube: true } 
+                  });
+                }).catch((e) => {
+                  if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { type: 'ANALYSIS_ERROR', error: e?.message || 'Analysis failed' });
+                });
+              }
+            } else {
+              // Regular page mode - use Lumen toggle logic
+              if (message.lumen) {
+                // RAG mode - use vector database
+                console.log('[ShadowSearch] 🔍 LUMEN ON - Starting RAG mode');
+                console.log('[ShadowSearch] Query:', message.query, 'Topic:', getLastTopic());
+                
+                const sessionId = getOrCreateSession(sender?.tab?.id ?? 0, true);
+                const topic = getLastTopic();
+                callWorker('qa', { query: message.query, topic, sessionId }).then((resp) => {
+                  console.log('[ShadowSearch] 🔍 QA Response received:');
+                  console.log('[ShadowSearch] - Answer length:', resp.answer?.length || 0);
+                  console.log('[ShadowSearch] - Sources count:', resp.sources?.length || 0);
+                  console.log('[ShadowSearch] - Sources:', resp.sources?.map(s => ({ title: s.title, url: s.url, source: s.source })) || []);
+                  console.log('[ShadowSearch] - Inserted IDs:', resp.insertedIds?.length || 0);
+                  
+                  // Generate videos for RAG mode
+                  console.log('[ShadowSearch] Calling search for RAG mode with topic:', topic, 'query:', message.query);
+                  callWorker('search', { topic, pageContent: '', query: message.query }).then((searchResp) => {
+                    console.log('[ShadowSearch] Search response for RAG:', searchResp);
+                    const payload = { insights: [resp.answer], videos: searchResp.videos || [], sources: resp.sources, qa: true };
+                    console.log('[ShadowSearch] 🔍 Sending payload to content script:', payload);
+                    if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { type: 'ANALYSIS_RESULT', payload });
+                  }).catch((e) => {
+                    console.error('[ShadowSearch] Search error for RAG:', e);
+                    const payload = { insights: [resp.answer], videos: [], sources: resp.sources, qa: true };
+                    console.log('[ShadowSearch] 🔍 Sending fallback payload to content script:', payload);
+                    if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { type: 'ANALYSIS_RESULT', payload });
+                  });
+                }).catch((e) => {
+                  console.error('[ShadowSearch] QA error:', e);
+                  if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { type: 'ANALYSIS_ERROR', error: e?.message || 'QA failed' });
+                });
+              } else {
+                // Page analysis mode - analyze current page content
+                callWorker('analyze_question', { 
+                  query: message.query, 
+                  title: response.title, 
+                  url: response.url, 
+                  text: response.text 
+                }).then((resp) => {
+                  // Generate videos for page analysis mode
+                  console.log('[ShadowSearch] Calling search for page analysis with title:', response.title, 'query:', message.query);
+                  callWorker('search', { topic: response.title, pageContent: response.text, query: message.query }).then((searchResp) => {
+                    console.log('[ShadowSearch] Search response for page analysis:', searchResp);
+                    if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { type: 'ANALYSIS_RESULT', payload: { insights: [resp.answer], videos: searchResp.videos || [], sources: [], qa: true } });
+                  }).catch((e) => {
+                    console.error('[ShadowSearch] Search error for page analysis:', e);
+                    if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { type: 'ANALYSIS_RESULT', payload: { insights: [resp.answer], videos: [], sources: [], qa: true } });
+                  });
+                }).catch((e) => {
+                  if (sender?.tab?.id) chrome.tabs.sendMessage(sender.tab.id, { type: 'ANALYSIS_ERROR', error: e?.message || 'Analysis failed' });
+                });
+              }
             }
-          });
-        }
-      });
-    }
+          }
+        });
+      }
+    });
   }
 });
 

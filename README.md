@@ -16,22 +16,52 @@ A Chrome extension that provides intelligent page analysis, contextual search, a
 - **YouTube Integration**: Video analysis and related content discovery
 - **Real-time Insights**: AI-generated insights and critical perspectives
 
-## 🏗️ Architecture (high level)
+## 🏗️ Architecture
 
+```mermaid
+flowchart TD
+  user("🧠 User clicks brain")
+  page{YouTube or Regular page?}
+  
+  %% Regular page flow
+  page -->|Regular| regular[📄 Regular Page Analysis]
+  regular --> analyze[🤖 AI Analysis]
+  analyze --> results1[💡 Insights + Videos]
+  
+  %% YouTube page flow  
+  page -->|YouTube| youtube[📺 YouTube Analysis]
+  youtube --> transcript[📝 Get Transcript]
+  transcript --> question[❓ Answer Question]
+  question --> results2[💡 Answer + Videos]
+  
+  %% Final output
+  results1 --> overlay[🖥️ Show Results]
+  results2 --> overlay
+  
+  %% Services used
+  analyze -.->|Uses| ai[🤖 Cloudflare AI]
+  question -.->|Uses| ai
+  regular -.->|Optional| rag[🔍 RAG Mode]
+  rag -.->|Uses| storage[💾 R2 Storage]
+  
+  %% Styling
+  classDef main fill:#E3F2FD,stroke:#1976D2,stroke-width:3px
+  classDef youtube fill:#E8F5E8,stroke:#4CAF50,stroke-width:2px
+  classDef regular fill:#FFF3E0,stroke:#FF9800,stroke-width:2px
+  classDef services fill:#F3E5F5,stroke:#9C27B0,stroke-width:2px
+  
+  class user,page,overlay main
+  class youtube,transcript,question,results2 youtube
+  class regular,analyze,results1,rag regular
+  class ai,storage services
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Chrome        │    │  Cloudflare      │    │   External      │
-│   Extension     │◄──►│  Workers API     │◄──►│   Services      │
-│                 │    │                  │    │                 │
-│ • Content Script│    │ • /analyzer      │    │ • Serper API    │
-│ • Background    │    │ • /search        │    │ • YouTube       │
-│ • Options       │    │ • /qa (RAG)      │    │ • AI Models     │
-│                 │    │ • /insights      │    │                 │
-└─────────────────┘    │ • /clear-session │    └─────────────────┘
-                       │ • R2 Storage     │
-                       │ • AI Models      │
-                       └──────────────────┘
-```
+
+### Key Components
+
+- **Browser Layer**: Content script, background script, options page
+- **Cloudflare Workers**: Analyzer, insights, QA, search, YouTube transcript
+- **Storage**: R2 for session management (RAG mode only)
+- **AI Services**: Cloudflare AI (Llama 3.1) for content analysis
 
 ## 🛠️ Setup
 
