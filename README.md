@@ -1,6 +1,6 @@
 # ShadowSearch - AI-Powered Browser Extension
 
-A Chrome extension that provides intelligent page analysis, contextual search, and AI-powered insights directly in your browser. Built with Cloudflare Workers for scalable AI processing and R2 storage for session management.
+A Chrome extension that provides intelligent page analysis, contextual search, and AI-powered insights directly in your browser. Backed by Cloudflare Workers AI and R2 for session-scoped source storage.
 
 ## UI
 <img src="https://github.com/raj-chinagundi/shadowsearch/blob/main/icons/2_img.png" alt="UI Preview" width="500"/> <br>
@@ -16,7 +16,7 @@ A Chrome extension that provides intelligent page analysis, contextual search, a
 - **YouTube Integration**: Video analysis and related content discovery
 - **Real-time Insights**: AI-generated insights and critical perspectives
 
-## 🏗️ Architecture
+## 🏗️ Architecture (high level)
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
@@ -33,7 +33,7 @@ A Chrome extension that provides intelligent page analysis, contextual search, a
                        └──────────────────┘
 ```
 
-## 🛠️ Setup Instructions
+## 🛠️ Setup
 
 ### Prerequisites
 
@@ -46,8 +46,7 @@ A Chrome extension that provides intelligent page analysis, contextual search, a
 
 ```bash
 git clone <your-repo-url>
-cd cloudfare_main
-npm install
+cd shadowsearch
 ```
 
 ### 2. Deploy Cloudflare Workers
@@ -63,7 +62,34 @@ wrangler login
 wrangler deploy
 ```
 
-The worker will be available at: `https://shadowsearch-api.your-username.workers.dev`
+The worker will be available at: `https://your-worker-name.your-username.workers.dev`
+
+#### Deploy Your Own Workers
+
+To use your own domain and configuration:
+
+1. **Update `wrangler.toml`**:
+   ```toml
+   name = "your-custom-api-name"
+   # ... other config
+   ```
+
+2. **Deploy with custom name**:
+   ```bash
+   cd workers/api
+   wrangler deploy --name your-custom-api-name
+   ```
+
+3. **Update extension defaults** (optional):
+   - Edit `src/background/workers-client.js`
+   - Replace the default worker URLs with your domain
+   - Or use the Options page to override endpoints
+
+4. **Set up custom domain** (optional):
+   ```bash
+   # Add custom domain to your worker
+   wrangler custom-domains add your-custom-api-name yourdomain.com
+   ```
 
 ### 3. Configure Environment Variables
 
@@ -76,11 +102,11 @@ wrangler secret put SERPER_API_KEY
 # Enter your Serper API key when prompted
 ```
 
-### 4. Load Extension in Chrome
+### 4. Load the Extension in Chrome
 
 1. Open Chrome and go to `chrome://extensions/`
 2. Enable "Developer mode"
-3. Click "Load unpacked" and select the `cloudfare_main` folder
+3. Click "Load unpacked" and select the `shadowsearch` folder
 4. The ShadowSearch extension should now appear in your extensions
 
 ### 5. Configure API Key (Optional)
@@ -100,6 +126,7 @@ wrangler secret put SERPER_API_KEY
 | `/insights` | POST | Generate AI-powered insights and critical takes |
 | `/qa` | POST | RAG-powered question answering with sources |
 | `/analyze_question` | POST | Analyze specific questions about page content |
+| `/youtube_transcript` | POST | Fetch and parse YouTube video transcripts |
 
 ### Session Management
 
@@ -112,7 +139,7 @@ wrangler secret put SERPER_API_KEY
 
 ```javascript
 // Analyze a page
-const response = await fetch('https://shadowsearch-api.your-username.workers.dev/analyzer', {
+const response = await fetch('https://your-worker-name.your-username.workers.dev/analyzer', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -123,7 +150,7 @@ const response = await fetch('https://shadowsearch-api.your-username.workers.dev
 });
 
 // Ask a question with RAG
-const qaResponse = await fetch('https://shadowsearch-api.your-username.workers.dev/qa', {
+const qaResponse = await fetch('https://your-worker-name.your-username.workers.dev/qa', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -170,41 +197,93 @@ wrangler dev
 # Extension will use localhost:8787 for API calls
 ```
 
+**Alternative: Use Options overrides**
+If you want to test against localhost while keeping production defaults, open the extension Options page and set Workers overrides:
+
+- analyzer → `http://127.0.0.1:8787/analyzer`
+- search → `http://127.0.0.1:8787/search`
+- insights → `http://127.0.0.1:8787/insights`
+- qa → `http://127.0.0.1:8787/qa`
+- analyze_question → `http://127.0.0.1:8787/analyze_question`
+- youtube_transcript → `http://127.0.0.1:8787/youtube_transcript`
+
 ### Testing Endpoints
 
 ```bash
 # Test analyzer
-curl -X POST https://shadowsearch-api.your-username.workers.dev/analyzer \
+curl -X POST https://your-worker-name.your-username.workers.dev/analyzer \
   -H "Content-Type: application/json" \
   -d '{"title":"Test","url":"https://example.com","text":"AI content"}'
 
 # Test RAG QA
-curl -X POST https://shadowsearch-api.your-username.workers.dev/qa \
+curl -X POST https://your-worker-name.your-username.workers.dev/qa \
   -H "Content-Type: application/json" \
   -d '{"query":"What is AI?","topic":"AI","sessionId":"test_session"}'
 
+# Test YouTube transcript
+curl -X POST https://your-worker-name.your-username.workers.dev/youtube_transcript \
+  -H "Content-Type: application/json" \
+  -d '{"videoId":"dQw4w9WgXcQ"}'
+
 # Clear session
-curl -X POST https://shadowsearch-api.your-username.workers.dev/clear-session \
+curl -X POST https://your-worker-name.your-username.workers.dev/clear-session \
   -H "Content-Type: application/json" \
   -d '{"sessionId":"test_session"}'
 ```
 
-## 📁 Project Structure
+## 📁 Project Structure (developer-oriented)
 
 ```
-cloudfare_main/
+shadowsearch/
 ├── src/
-│   ├── background/          # Service worker
-│   ├── content/            # Content script
-│   └── options/            # Extension options
+│   ├── background/
+│   │   ├── background.js          # Entry (service worker) – message dispatcher
+│   │   ├── workers-client.js      # DEFAULT_WORKERS, callWorker(), getApiBaseUrl()
+│   │   ├── sessions.js            # tabSessions, getOrCreateSession(), clearSessionOnServer()
+│   │   └── flows/
+│   │       └── analyze-page.js    # handleAnalysis(), handleYouTubeAnalysis(), lastTopic helpers
+│   ├── content/
+│   │   ├── content.js             # Entry (kept) – builds UI, wires events
+│   │   ├── dom/escapeHtml.js      # HTML escaping helper
+│   │   ├── extractors/readable-text.js  # get readable text + YouTube videoId
+│   │   └── overlay/render.js      # Pure rendering for insights/videos/sources (hides Video Analysis on YouTube pages)
+│   └── options/
+│       ├── options.html
+│       └── options.js
 ├── workers/
-│   └── api/                # Cloudflare Worker
-│       ├── src/index.js    # Main worker code
-│       └── wrangler.toml   # Worker config
-├── prompts/                # AI prompt templates
-├── icons/                  # Extension icons
-└── manifest.json           # Extension manifest
+│   └── api/
+│       ├── src/
+│       │   ├── index.js           # Router only (dispatches to routes/*)
+│       │   ├── routes/
+│       │   │   ├── analyzer.js
+│       │   │   ├── analyzeQuestion.js
+│       │   │   ├── qa.js
+│       │   │   ├── search.js
+│       │   │   ├── insights.js
+│       │   │   ├── clearSession.js
+│       │   │   ├── r2Content.js
+│       │   │   └── youtubeTranscript.js
+│       │   ├── services/
+│       │   │   ├── articles.js    # fetch + extract article text
+│       │   │   ├── google.js      # Serper client
+│       │   │   └── youtube.js     # YouTube search scraping + parse
+│       │   └── utils/
+│       │       ├── cors.js        # corsHeaders(), json()
+│       │       └── text.js        # clean(), hash(), safeJson(), keywordGuess(), etc.
+│       └── wrangler.toml
+├── prompts/                        # AI prompt templates
+├── icons/
+└── manifest.json
 ```
+
+### Where to work on things
+- UI rendering: `src/content/overlay/render.js`
+- Extracting page text/YouTube video id: `src/content/extractors/readable-text.js`
+- Overlay construction and user interactions: `src/content/content.js`
+- Messaging to Workers API (background side): `src/background/workers-client.js`
+- Session lifecycle: `src/background/sessions.js`
+- Page analysis flow: `src/background/flows/analyze-page.js`
+- Workers: route handlers in `workers/api/src/routes/*` and helper services in `workers/api/src/services/*`
 
 ## 🔑 Environment Variables
 
@@ -249,10 +328,16 @@ MIT License - see LICENSE file for details
 - Check R2 bucket permissions
 - Ensure session management is working
 
-**YouTube videos not loading:**
-- Check YouTube worker is running locally
-- Verify network connectivity
-- Check for CORS issues
+**YouTube analysis not working:**
+- Ensure the API worker is deployed and accessible at your Workers domain
+- Test transcript endpoint:
+  - `curl -X POST https://your-worker-name.your-username.workers.dev/youtube_transcript -H "Content-Type: application/json" -d '{"videoId":"dQw4w9WgXcQ"}'`
+- In Chrome DevTools (Service Worker console), check for `youtube_transcript` errors
+
+### Behavior notes
+
+- Streaming UI: overlay updates incrementally. Insights appear first, then related videos and sources when ready. Empty fields do not overwrite existing content to prevent flicker.
+- YouTube pages: transcript is fetched via `/youtube_transcript`; overlay hides the "Video Analysis" card on YouTube pages by design.
 
 ### Debug Mode
 

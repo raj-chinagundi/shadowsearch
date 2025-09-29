@@ -1,67 +1,7 @@
 // Background service worker for ShadowSearch
-
-let lastTopic = null;
-let lastTabId = null;
-// Per-tab, per-mode sessions kept in memory
-// tabSessions[tabId] = { on?: sessionId, off?: sessionId }
-const tabSessions = {};
-
-function genSessionId(tabId, mode) {
-  return `session_${tabId}_${mode}_${Date.now()}`;
-}
-
-function getOrCreateSession(tabId, isLumenOn) {
-  const mode = isLumenOn ? 'on' : 'off';
-  if (!tabSessions[tabId]) tabSessions[tabId] = {};
-  if (!tabSessions[tabId][mode]) {
-    tabSessions[tabId][mode] = genSessionId(tabId, mode);
-    console.log('[ShadowSearch] Created session:', mode, 'for tab', tabId);
-  }
-  return tabSessions[tabId][mode];
-}
-
-function getApiBaseUrl(workersOverrides = {}) {
-  const analyzerUrl = workersOverrides.analyzer || DEFAULT_WORKERS.analyzer;
-  try {
-    const u = new URL(analyzerUrl);
-    const basePath = u.pathname.replace(/\/analyzer$/, '');
-    return `${u.protocol}//${u.host}${basePath}`;
-  } catch (_) {
-    return analyzerUrl.replace(/\/analyzer$/, '');
-  }
-}
-
-async function clearSessionOnServer(sessionId) {
-  try {
-    if (!sessionId) return;
-    const { workers = {} } = await chrome.storage.sync.get(['workers']);
-    const base = getApiBaseUrl(workers);
-    const response = await fetch(`${base}/clear-session`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ sessionId })
-    });
-    const result = await response.json();
-    if (result.deleted > 0) {
-      console.log('[ShadowSearch] Cleaned', result.deleted, 'objects from R2');
-    }
-  } catch (e) {
-    console.warn('[ShadowSearch] Cleanup failed:', e?.message || e);
-  }
-}
-
-const DEFAULT_WORKERS = {
-  analyzer: 'https://shadowsearch-api.tylerbrent017.workers.dev/analyzer',
-  search: 'https://shadowsearch-api.tylerbrent017.workers.dev/search',
-  insights: 'https://shadowsearch-api.tylerbrent017.workers.dev/insights',
-  qa: 'https://shadowsearch-api.tylerbrent017.workers.dev/qa',
-  analyze_question: 'https://shadowsearch-api.tylerbrent017.workers.dev/analyze_question',
-  // YouTube worker endpoints (still local)
-  youtube_detect: 'http://127.0.0.1:8788/detect-youtube',
-  youtube_download: 'http://127.0.0.1:8788/download-video',
-  youtube_analyze: 'http://127.0.0.1:8788/analyze-video',
-  youtube_insights: 'http://127.0.0.1:8788/youtube-insights'
-};
+import { DEFAULT_WORKERS, callWorker } from './workers-client.js';
+import { tabSessions, genSessionId, getOrCreateSession, clearSessionOnServer } from './sessions.js';
+import { handleAnalysis, handleYouTubeAnalysis, setLastTabId, getLastTopic } from './flows/analyze-page.js';
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
@@ -120,8 +60,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   
   if (message?.type === 'ANALYZE_PAGE') {
-    if (sender?.tab?.id !== undefined) lastTabId = sender.tab.id;
-    handleAnalysis(message.payload)
+    if (sender?.tab?.id !== undefined) { setLastTabId(sender.tab.id); }
+    handleAnalysis(sender?.tab?.id, message.payload)
       .then((data) => {
         try { console.log('[ShadowSearch] Analysis result', JSON.stringify(data).slice(0, 2000)); } catch (_) {}
         sendResponse(data);
@@ -140,10 +80,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.lumen) {
       // RAG mode - use vector database
       console.log('[ShadowSearch] 🔍 LUMEN ON - Starting RAG mode');
-      console.log('[ShadowSearch] Query:', message.query, 'Topic:', lastTopic);
+      console.log('[ShadowSearch] Query:', message.query, 'Topic:', getLastTopic());
       
       const sessionId = getOrCreateSession(sender?.tab?.id ?? 0, true);
-      callWorker('qa', { query: message.query, topic: lastTopic, sessionId }).then((resp) => {
+      const topic = getLastTopic();
+      callWorker('qa', { query: message.query, topic, sessionId }).then((resp) => {
         console.log('[ShadowSearch] 🔍 QA Response received:');
         console.log('[ShadowSearch] - Answer length:', resp.answer?.length || 0);
         console.log('[ShadowSearch] - Sources count:', resp.sources?.length || 0);
@@ -151,8 +92,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('[ShadowSearch] - Inserted IDs:', resp.insertedIds?.length || 0);
         
         // Generate videos for RAG mode
-        console.log('[ShadowSearch] Calling search for RAG mode with topic:', lastTopic, 'query:', message.query);
-        callWorker('search', { topic: lastTopic, pageContent: '', query: message.query }).then((searchResp) => {
+        console.log('[ShadowSearch] Calling search for RAG mode with topic:', topic, 'query:', message.query);
+        callWorker('search', { topic, pageContent: '', query: message.query }).then((searchResp) => {
           console.log('[ShadowSearch] Search response for RAG:', searchResp);
           const payload = { insights: [resp.answer], videos: searchResp.videos || [], sources: resp.sources, qa: true };
           console.log('[ShadowSearch] 🔍 Sending payload to content script:', payload);
@@ -198,151 +139,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
   }
 });
-
-async function handleAnalysis(payload) {
-  const { title, url, text, isYouTube, videoId } = payload || {};
-  
-  // Handle YouTube-specific analysis
-  if (isYouTube && videoId) {
-    return handleYouTubeAnalysis({ title, url, text, videoId });
-  }
-  
-  // Regular page analysis
-  try {
-    const analyzer = await callWorker('analyzer', { title, url, text });
-    lastTopic = analyzer?.topic || null;
-    const search = await callWorker('search', { topic: analyzer.topic, entities: analyzer.entities, pageContent: text, query: '' });
-    const insights = await callWorker('insights', { analyzer, search });
-    
-    // Auto-run QA to populate Sources
-    try {
-      console.log('[ShadowSearch] Auto QA start', analyzer.topic);
-      const sessionId = getOrCreateSession(lastTabId ?? 0, false);
-      const qaResp = await callWorker('qa', { query: analyzer.topic || '', topic: lastTopic, sessionId });
-      console.log('[ShadowSearch] Auto QA response', JSON.stringify(qaResp).slice(0, 500));
-      return { ...insights, videos: search?.videos || [], sources: qaResp?.sources || [], qa: false };
-    } catch (err) {
-      console.warn('[ShadowSearch] Auto QA error', err?.message || err);
-      return insights;
-    }
-  } catch (e) {
-    // Fallback mock so the extension works out-of-the-box
-    console.warn('Workers not reachable, using mock data:', e?.message);
-    return mockInsights({ title, url, text });
-  }
-}
-
-async function handleYouTubeAnalysis({ title, url, text, videoId }) {
-  try {
-    console.log('[ShadowSearch] YouTube analysis for video:', videoId);
-    
-    // Step 1: Download video (simulated for now)
-    const downloadResult = await callWorker('youtube_download', { videoId, url });
-    console.log('[ShadowSearch] Video download result:', downloadResult);
-    
-    // Step 2: Analyze video with Gemini
-    const analysisResult = await callWorker('youtube_analyze', { 
-      videoId, 
-      videoPath: downloadResult.videoInfo?.localPath,
-      analysisType: 'comprehensive'
-    });
-    console.log('[ShadowSearch] Video analysis result:', analysisResult);
-    
-    // Step 3: Generate YouTube-specific insights
-    const insightsResult = await callWorker('youtube_insights', { 
-      videoId, 
-      analysis: analysisResult.analysis 
-    });
-    console.log('[ShadowSearch] YouTube insights result:', insightsResult);
-    
-    // Return YouTube-specific response
-    return {
-      insights: insightsResult.insights?.insights || [],
-      takes: insightsResult.insights?.takes || [],
-      videoAnalysis: analysisResult.analysis,
-      isYouTube: true,
-      videos: [], // No related videos for YouTube mode
-      sources: [] // No sources for YouTube mode
-    };
-    
-  } catch (e) {
-    console.error('[ShadowSearch] YouTube analysis error:', e?.message || e);
-    
-    // Fallback for YouTube analysis
-    return {
-      insights: [
-        `YouTube video analysis for: ${title}`,
-        'Video content detected and processing initiated',
-        'AI analysis may take a moment to complete'
-      ],
-      takes: [
-        'Consider multiple perspectives on video content',
-        'Verify claims with additional sources'
-      ],
-      videoAnalysis: {
-        result: 'Video analysis in progress. This is a simulated response for demonstration.',
-        educationalValue: 'Educational content detected',
-        targetAudience: 'General audience'
-      },
-      isYouTube: true,
-      videos: [],
-      sources: [],
-      error: e?.message || 'YouTube analysis failed'
-    };
-  }
-}
-
-async function callWorker(name, body) {
-  const { workers = {}, serperApiKey = '' } = await chrome.storage.sync.get(['workers', 'serperApiKey']);
-  const base = workers[name] || DEFAULT_WORKERS[name];
-  console.log('[ShadowSearch] Calling worker', name, base);
-  
-  // Add API key to body for search-related calls
-  const requestBody = { ...body };
-  if (name === 'search' && serperApiKey) {
-    requestBody.serperApiKey = serperApiKey;
-  }
-  
-  try {
-    const res = await fetch(base, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(requestBody)
-    });
-    
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      console.error('[ShadowSearch] Worker error', name, res.status, text);
-      throw new Error(`${name} worker failed: ${res.status} - ${text}`);
-    }
-    
-    const json = await res.json();
-    console.log('[ShadowSearch] Worker response', name, JSON.stringify(json).slice(0, 800));
-    return json;
-  } catch (error) {
-    console.error('[ShadowSearch] Worker fetch error', name, error.message);
-    throw new Error(`Failed to reach ${name} worker: ${error.message}`);
-  }
-}
-
-function mockInsights({ title, url, text }) {
-  const topic = (title || url || 'this page').slice(0, 80);
-  return {
-    insights: [
-      `Summary for ${topic}: page analyzed locally (mock).`,
-      'Core idea extraction pending real Workers connection.',
-      'This is a placeholder to demonstrate the UI flow.'
-    ],
-    takes: [
-      'Critique: Ensure privacy by analyzing only on explicit user action.',
-      'Consider trade-offs between speed and depth of analysis.'
-    ],
-    videos: [
-      { title: 'What is ShadowSearch?', url: 'https://www.youtube.com/results?search_query=ai+context+overlay' },
-      { title: 'Contextual AI UX patterns', url: 'https://www.youtube.com/results?search_query=contextual+ai+ux' }
-    ]
-  };
-}
 
 
 

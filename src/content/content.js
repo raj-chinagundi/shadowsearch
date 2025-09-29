@@ -150,13 +150,13 @@
   }
 
   function requestAnalysis() {
-    const text = extractReadableText();
+    const text = (window.__ss?.extractors?.extractReadableText || extractReadableText)();
     const title = document.title;
     const url = location.href;
     
     // Check if this is a YouTube page
     const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
-    const videoId = extractVideoId(url);
+    const videoId = (window.__ss?.extractors?.extractVideoId || extractVideoId)(url);
 
     chrome.runtime.sendMessage({
       type: 'ANALYZE_PAGE',
@@ -189,13 +189,19 @@
 
   function setError(message) {
     const insights = document.getElementById('ss-insights');
-    if (insights) insights.innerHTML = `<div class="ss-error">${escapeHtml(message)}</div>`;
+    const esc = window.__ss?.dom?.escapeHtml || escapeHtml;
+    if (insights) insights.innerHTML = `<div class="ss-error">${esc(message)}</div>`;
   }
 
   function updateOverlay(data) {
+    // Delegate to overlay renderer module for DOM updates
+    if (window.__ss?.overlay?.renderOverlayData) {
+      window.__ss.overlay.renderOverlayData(data);
+      return;
+    }
+    // Fallback to in-file renderer (kept for compatibility)
     const { insights = [], videos = [], sources = [], videoAnalysis = null, isYouTube = false } = data || {};
-    console.log('[Content] 🔍 updateOverlay called with data:', data);
-    console.log('[Content] 🔍 Sources in updateOverlay:', sources);
+    const esc = window.__ss?.dom?.escapeHtml || escapeHtml;
     const insightsEl = document.getElementById('ss-insights');
     const videosEl = document.getElementById('ss-videos');
     const sourcesEl = document.getElementById('ss-sources');
@@ -203,85 +209,15 @@
     const videoSection = document.getElementById('ss-video-section');
     const relatedVideosSection = document.getElementById('ss-related-videos-section');
     const sourcesSection = document.getElementById('ss-sources-section');
-
-    // Show/hide sections based on whether this is YouTube
-    if (isYouTube) {
-      videoSection.style.display = 'block';
-      relatedVideosSection.style.display = 'none';
-      sourcesSection.style.display = 'none';
-    } else {
-      videoSection.style.display = 'none';
-      relatedVideosSection.style.display = 'block';
-      sourcesSection.style.display = 'block';
-    }
-
-    if (insightsEl) {
-      if (!insights.length) {
-        insightsEl.innerHTML = '<div class="ss-empty">No insights found.</div>';
-      } else {
-        insightsEl.innerHTML = `<ul>${insights.map((i) => {
-          // Split long answers into multiple lines for better formatting
-          const lines = i.split('\n').filter(line => line.trim());
-          if (lines.length > 1) {
-            return lines.map(line => `<li>• ${escapeHtml(line.trim())}</li>`).join('');
-          }
-          return `<li>• ${escapeHtml(i)}</li>`;
-        }).join('')}</ul>`;
-      }
-    }
-
-    // Handle video analysis for YouTube
-    if (videoAnalysisEl) {
-      if (videoAnalysis) {
-        videoAnalysisEl.classList.remove('ss-muted');
-        videoAnalysisEl.innerHTML = `
-          <div class="ss-video-analysis-content">
-            <h4>AI Video Analysis</h4>
-            <div class="ss-analysis-text">${escapeHtml(videoAnalysis.result || 'Analysis not available')}</div>
-            ${videoAnalysis.educationalValue ? `<div class="ss-educational-value"><strong>Educational Value:</strong> ${escapeHtml(videoAnalysis.educationalValue)}</div>` : ''}
-            ${videoAnalysis.targetAudience ? `<div class="ss-target-audience"><strong>Target Audience:</strong> ${escapeHtml(videoAnalysis.targetAudience)}</div>` : ''}
-          </div>
-        `;
-      } else {
-        videoAnalysisEl.innerHTML = '<div class="ss-empty">Video analysis not available.</div>';
-      }
-    }
-
-    if (videosEl) {
-      videosEl.classList.remove('ss-muted');
-      if (videos.length) {
-        videosEl.innerHTML = videos.map((v) => `
-          <a class="ss-video-card" href="${encodeURI(v.url)}" target="_blank" rel="noreferrer">
-            <img src="${v.thumbnail || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIiB2aWV3Qm94PSIwIDAgMzIwIDE4MCI+PHJlY3Qgd2lkdGg9IjMyMCIgaGVpZ2h0PSIxODAiIGZpbGw9IiNmMGYwZjAiLz48dGV4dCB4PSIxNjAiIHk9IjkwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjOTk5Ij5ObyB0aHVtYm5haWw8L3RleHQ+PC9zdmc+'}" 
-                 alt="${escapeHtml(v.title)}" class="ss-video-thumb" />
-            <div class="ss-video-info">
-              <h4 class="ss-video-title">${escapeHtml(v.title)}</h4>
-              <p class="ss-video-channel">${escapeHtml(v.channel || 'Unknown')}</p>
-            </div>
-          </a>
-        `).join('');
-      } else {
-        videosEl.innerHTML = '<div class="ss-empty">No related videos.</div>';
-      }
-    }
-    if (sourcesEl) {
-      console.log('[Content] 🔍 Rendering sources:', sources);
-      sourcesEl.classList.remove('ss-muted');
-      sourcesEl.innerHTML = sources.length ? `<ul>${sources.map((s) => `<li><a href="${encodeURI(s.url)}" target="_blank" rel="noreferrer">${escapeHtml(s.title || s.url)}${s.source ? ` — ${escapeHtml(s.source)}` : ''}</a></li>`).join('')}</ul>` : '<div class="ss-empty">No sources.</div>';
-      console.log('[Content] 🔍 Sources HTML set:', sourcesEl.innerHTML);
-    }
+    if (isYouTube) { videoSection.style.display = 'block'; relatedVideosSection.style.display = 'none'; sourcesSection.style.display = 'none'; }
+    else { videoSection.style.display = 'none'; relatedVideosSection.style.display = 'block'; sourcesSection.style.display = 'block'; }
+    if (insightsEl) { insightsEl.innerHTML = insights.length ? `<ul>${insights.map((i)=>{ const lines=i.split('\n').filter(l=>l.trim()); return lines.length>1?lines.map(line=>`<li>• ${esc(line.trim())}</li>`).join(''):`<li>• ${esc(i)}</li>`; }).join('')}</ul>` : '<div class="ss-empty">No insights found.</div>'; }
+    if (videoAnalysisEl) { if (videoAnalysis) { videoAnalysisEl.classList.remove('ss-muted'); videoAnalysisEl.innerHTML = `<div class="ss-video-analysis-content"><h4>AI Video Analysis</h4><div class="ss-analysis-text">${esc(videoAnalysis.result || 'Analysis not available')}</div>${videoAnalysis.educationalValue ? `<div class=\"ss-educational-value\"><strong>Educational Value:</strong> ${esc(videoAnalysis.educationalValue)}</div>` : ''}${videoAnalysis.targetAudience ? `<div class=\"ss-target-audience\"><strong>Target Audience:</strong> ${esc(videoAnalysis.targetAudience)}</div>` : ''}</div>`; } else { videoAnalysisEl.innerHTML = '<div class="ss-empty">Video analysis not available.</div>'; } }
+    if (videosEl) { videosEl.classList.remove('ss-muted'); videosEl.innerHTML = videos.length ? videos.map((v)=>`<a class=\"ss-video-card\" href=\"${encodeURI(v.url)}\" target=\"_blank\" rel=\"noreferrer\"><img src=\"${v.thumbnail || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIiB2aWV3Qm94PSIwIDAgMzIwIDE4MCI+PHJlY3Qgd2lkdGg9IjMyMCIgaGVpZ2h0PSIxODAiIGZpbGw9IiNmMGYwZjAiLz48dGV4dCB4PSIxNjAiIHk9IjkwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjOTk5Ij5ObyB0aHVtYm5haWw8L3RleHQ+PC9zdmc+'}\" alt=\"${esc(v.title)}\" class=\"ss-video-thumb\" /><div class=\"ss-video-info\"><h4 class=\"ss-video-title\">${esc(v.title)}</h4><p class=\"ss-video-channel\">${esc(v.channel || 'Unknown')}</p></div></a>`).join('') : '<div class="ss-empty">No related videos.</div>'; }
+    if (sourcesEl) { sourcesEl.classList.remove('ss-muted'); sourcesEl.innerHTML = sources.length ? `<ul>${sources.map((s)=>`<li><a href=\"${encodeURI(s.url)}\" target=\"_blank\" rel=\"noreferrer\">${esc(s.title || s.url)}${s.source ? ` — ${esc(s.source)}` : ''}</a></li>`).join('')}</ul>` : '<div class="ss-empty">No sources.</div>'; }
   }
 
-  function extractReadableText() {
-    const article = document.querySelector('article');
-    const main = document.querySelector('main');
-    const candidate = article || main || document.body;
-    const clone = candidate.cloneNode(true);
-    // Remove script/style/nav/aside
-    clone.querySelectorAll('script,style,nav,aside,footer,header').forEach((n) => n.remove());
-    const text = clone.innerText || '';
-    return text.trim().replace(/\s+/g, ' ').slice(0, 20000);
-  }
+  function extractReadableText() { return (window.__ss?.extractors?.extractReadableText || function(){ return ''; })(); }
 
 
   // Receive updates from background
@@ -289,21 +225,14 @@
     if (msg?.type === 'ANALYSIS_RESULT') updateOverlay(msg.payload);
     if (msg?.type === 'ANALYSIS_ERROR') setError(msg.error || 'Unknown error');
     if (msg?.type === 'GET_PAGE_CONTENT') {
-      const text = extractReadableText();
+      const text = (window.__ss?.extractors?.extractReadableText || extractReadableText)();
       const title = document.title;
       const url = location.href;
       sendResponse({ title, url, text });
     }
   });
 
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
+  function escapeHtml(s) { return (window.__ss?.dom?.escapeHtml || ((x)=>String(x)))(s); }
 })();
 
 

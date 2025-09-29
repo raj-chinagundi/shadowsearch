@@ -14,7 +14,12 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["src/content/content.js"],
+      "js": [
+        "src/content/dom/escapeHtml.js",
+        "src/content/extractors/readable-text.js",
+        "src/content/overlay/render.js",
+        "src/content/content.js"
+      ],
       "css": ["src/content/styles.css"],
       "run_at": "document_idle"
     }
