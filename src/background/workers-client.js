@@ -1,13 +1,12 @@
 // Worker endpoints and client utilities for background service worker
 
 export const DEFAULT_WORKERS = {
-  analyzer: 'https://shadowsearch-api.tylerbrent017.workers.dev/analyzer',
-  search: 'https://shadowsearch-api.tylerbrent017.workers.dev/search',
-  insights: 'https://shadowsearch-api.tylerbrent017.workers.dev/insights',
-  qa: 'https://shadowsearch-api.tylerbrent017.workers.dev/qa',
-  analyze_question: 'https://shadowsearch-api.tylerbrent017.workers.dev/analyze_question',
-  // Public transcript worker (replace with your deployed Workers URL)
-  youtube_transcript: 'https://shadowsearch-api.tylerbrent017.workers.dev/youtube_transcript',
+  analyzer: 'https://your-worker-name.your-username.workers.dev/analyzer',
+  search: 'https://your-worker-name.your-username.workers.dev/search',
+  insights: 'https://your-worker-name.your-username.workers.dev/insights',
+  qa: 'https://your-worker-name.your-username.workers.dev/qa',
+  analyze_question: 'https://your-worker-name.your-username.workers.dev/analyze_question',
+  youtube_transcript: 'https://your-worker-name.your-username.workers.dev/youtube_transcript',
 };
 
 export function getApiBaseUrl(workersOverrides = {}) {
