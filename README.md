@@ -20,8 +20,7 @@ A Chrome extension that provides intelligent page analysis, contextual search, a
 
 ```mermaid
 flowchart TD
-  user("🧠 User clicks brain")
-  page{YouTube or Regular page?}
+  user("🧠 User clicks brain")-->page{YouTube or Regular page?}
   
   %% Regular page flow
   page -->|Regular| regular[📄 Regular Page Analysis]
