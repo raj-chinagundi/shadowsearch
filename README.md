@@ -6,14 +6,8 @@ A Chrome extension that provides intelligent page analysis, contextual search, a
 The extension relies on Cloudflare Workers for AI analysis, insights, QA, and search functionality.  
 Follow the setup instructions below to deploy your workers before using the extension.
 
-<a href="https://youtu.be/PrT10WcY5UY" target="_blank">
-  <img src="https://img.youtube.com/vi/PrT10WcY5UY/0.jpg" 
-       alt="Demo Video" 
-       style="width:600px; border:0; display:block; position:relative;">
-  <img src="https://upload.wikimedia.org/wikipedia/commons/7/73/Flat_tick_icon.png" 
-       alt="Play Button" 
-       style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:80px;">
-</a>
+## DEMO VIDEO
+[![Demo Video](https://img.youtube.com/vi/PrT10WcY5UY/0.jpg)](https://youtu.be/PrT10WcY5UY)
 
 
 ## 🚀 Features
