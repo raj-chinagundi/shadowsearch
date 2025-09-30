@@ -12,9 +12,7 @@ Follow the setup instructions below to deploy your workers before using the exte
   <source src="icons/video1668689188.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
-<!-- <img src="https://github.com/raj-chinagundi/shadowsearch/blob/main/icons/2_img.png" alt="UI Preview" width="500"/> <br>
 
-<img src="https://github.com/raj-chinagundi/shadowsearch/blob/main/icons/1_img.png" alt="UI Preview" width="500"/> -->
 
 ## 🚀 Features
 
