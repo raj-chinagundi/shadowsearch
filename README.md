@@ -6,10 +6,15 @@ A Chrome extension that provides intelligent page analysis, contextual search, a
 The extension relies on Cloudflare Workers for AI analysis, insights, QA, and search functionality.  
 Follow the setup instructions below to deploy your workers before using the extension.
 
-## UI
-<img src="https://github.com/raj-chinagundi/shadowsearch/blob/main/icons/2_img.png" alt="UI Preview" width="500"/> <br>
+## DEMO
 
-<img src="https://github.com/raj-chinagundi/shadowsearch/blob/main/icons/1_img.png" alt="UI Preview" width="500"/>
+<video width="600" controls>
+  <source src="icons/video1668689188.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+<!-- <img src="https://github.com/raj-chinagundi/shadowsearch/blob/main/icons/2_img.png" alt="UI Preview" width="500"/> <br>
+
+<img src="https://github.com/raj-chinagundi/shadowsearch/blob/main/icons/1_img.png" alt="UI Preview" width="500"/> -->
 
 ## 🚀 Features
 
